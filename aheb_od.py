@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def gen_data(features: dict) -> NDArray:
+def gen_data(features: dict) -> tuple[NDArray, NDArray]:
     """
         Generate artificial contaminated datasets, based on set of features.
 
@@ -158,6 +158,89 @@ def MMS(X: NDArray) -> tuple[float, float]:
     return MMS_max, MMS_min
 
 
+def EMMS(X: NDArray) -> tuple[float, float]:
+    """
+        Check for nonsignificant outliers in a dataset, using the EMMS formula.
+
+        Parameters
+        ----------
+        X : ndarray
+            Original dataset.
+
+        Returns
+        -------
+        EMMS_max : float
+            Value which identifies maximum outliers.
+        EMMS_min: float
+            Value which identifies minimum outliers.
+    """
+    def a_T(a: float) -> float:
+        return a - X[0]
+
+    def a_TT(a: float, n: int) -> float:
+        G_aT = np.sum(a_T(X)) / n
+        Gx = np.sum(np.arange(n)) / n
+
+        return np.abs(a_T(a) - np.where(X == a)[0][0] * (G_aT / Gx))
+
+    n = len(X)
+    a_max_TT = a_TT(np.max(X), n)
+    S_n_TT = np.sum(a_TT(X, n))
+
+    EMMS_max = a_max_TT / S_n_TT
+    EMMS_min = a_max_TT / (a_max_TT * n - S_n_TT)
+
+    print(a_T(X))
+
+    return EMMS_max, EMMS_min
+
+
+def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
+    X_clean = remove_nan(X)
+    X_new = np.copy(X_clean)
+    n = len(X)
+    Y_pred = np.repeat([0], n)
+
+    R_w = (2 / n) * (1 + k1)
+    MMS_max, MMS_min = MMS(X_new)
+
+    while MMS_max > R_w or MMS_min > R_w:
+        if MMS_max > R_w:
+            out = np.max(X_new)  # Max. element is the outlier
+        else:
+            out = np.min(X_new)  # Max. element is the outlier
+
+        # Outlier indexes (current & original datasets)
+        r = np.where(X_new == out)[0][0]
+        i = np.where(X_clean == out)[0][0]
+
+        Y_pred[i] = 1  # Mark outlier
+        X_new = remove(X_new, r)  # Remove outlier
+        n -= 1
+
+        MMS_max, MMS_min = MMS(X_new)
+
+    R_w = (2 / n) * (1 + k2)
+    EMMS_max, EMMS_min = EMMS(X_new)
+
+    while EMMS_max > R_w or EMMS_min > R_w:
+        if EMMS_max > R_w:
+            out = np.max(X_new)
+        else:
+            out = np.min(X_new)
+
+        r = np.where(X_new == out)[0][0]
+        i = np.where(X_clean == out)[0][0]
+
+        Y_pred[i] = 1
+        X_new = remove(X_new, r)
+        n -= 1
+
+        EMMS_max, EMMS_min = EMMS(X_new)
+
+    return X_new, Y_pred
+
+
 if __name__ == '__main__':
     env_features = {
         'type': ['asc', 'const', 'desc'],
@@ -170,3 +253,7 @@ if __name__ == '__main__':
     keys, values = list(env_features.keys()), list(env_features.values())
     env_combs = [dict(zip(keys, comb)) for comb in itertools.product(*values)]
 
+    X, Y = np.array([100, 101, 102, 103.6, 104]), np.array([0, 0, 0, 1, 0])
+    X_new, Y_pred = detect_unknown(X, 0.5, 0.01)
+
+    print(X_new, Y_pred)
