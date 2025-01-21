@@ -21,7 +21,9 @@ def gen_data(features: dict) -> tuple[NDArray, NDArray]:
     """
     n = features['n']
     n_cont = np.int32(n * 0.5)
-    n_missing = np.int32(n * 0.3)
+    n_missing = np.int32(n * 0.1)
+
+    np.random.seed(40)
     ref = np.random.randint(-100, 100)
 
     # Generate an arithmetic progression with n elements
@@ -33,22 +35,15 @@ def gen_data(features: dict) -> tuple[NDArray, NDArray]:
         case 'desc':
             X = np.arange(ref + n - 1, ref - 1, -1, dtype=np.float32)
         
-    # First n_missing datapoints are NaN
-    if features['init_miss']:
-        X[:n_missing] = [np.nan] * n_missing  
+    cont_idx = np.random.choice(n, n_cont, replace=False)
 
-        n_cont = np.int32((n - n_missing) * 0.5)  # Only contaminate the present values
-        cont_idx = np.random.choice(np.arange(start=n_missing, stop=n), n_cont, replace=False)
+    # Make sure the first element is an outlier
+    if features['ref_outlier'] and 0 not in cont_idx:
+        cont_idx[0] = 0
 
-        # Make sure the first present element is an outlier
-        if features['ref_outlier'] and n_missing not in cont_idx:
-            cont_idx[0] = n_missing
-    else:
-        cont_idx = np.random.choice(n, n_cont, replace=False)
-
-        # Make sure the first element is an outlier
-        if features['ref_outlier'] and 0 not in cont_idx:
-            cont_idx[0] = 0
+    # Make sure the first element is NOT an outlier
+    if not features['ref_outlier'] and 0 in cont_idx:
+        np.delete(cont_idx, np.where(cont_idx == 0)[0][0])
 
     # Generate outliers
     if features['gauss_out']:
@@ -61,6 +56,11 @@ def gen_data(features: dict) -> tuple[NDArray, NDArray]:
     for i, idx in enumerate(cont_idx):
         X[idx] = outliers[i]
         Y[idx] = 1
+
+    if features['init_miss']:
+        nan_idx = np.random.choice(np.arange(n)[1:], n_missing, replace=False)
+
+        X[nan_idx], Y[nan_idx] = np.nan, -1
 
     return X, Y
 
@@ -158,7 +158,7 @@ def MMS(X: NDArray) -> tuple[float, float]:
     return MMS_max, MMS_min
 
 
-def EMMS(X: NDArray) -> tuple[float, float]:
+def EMMS(X: NDArray) -> tuple[float, float, float]:
     """
         Check for nonsignificant outliers in a dataset, using the EMMS formula.
 
@@ -173,26 +173,34 @@ def EMMS(X: NDArray) -> tuple[float, float]:
             Value which identifies maximum outliers.
         EMMS_min: float
             Value which identifies minimum outliers.
+        out: float
+            Identified outlier.
     """
+    a_0 = X[0]
+
     def a_T(a: float) -> float:
-        return a - X[0]
-
-    def a_TT(a: float, n: int) -> float:
-        G_aT = np.sum(a_T(X)) / n
-        Gx = np.sum(np.arange(n)) / n
-
-        return np.abs(a_T(a) - np.where(X == a)[0][0] * (G_aT / Gx))
+        return a - a_0
 
     n = len(X)
-    a_max_TT = a_TT(np.max(X), n)
-    S_n_TT = np.sum(a_TT(X, n))
+    G_aT = np.sum(a_T(X)) / n
+    Gx = np.sum(np.arange(n)) / n
 
-    EMMS_max = a_max_TT / S_n_TT
-    EMMS_min = a_max_TT / (a_max_TT * n - S_n_TT)
+    def a_TT(a: float) -> float:
+        return np.abs(a_T(a) - np.where(X == a)[0][0] * (G_aT / Gx))
 
-    print(a_T(X))
+    a_TT_X = np.array(list(map(a_TT, X)))
+    a_TT_max = np.max(a_TT_X)
 
-    return EMMS_max, EMMS_min
+    S_n_TT = np.sum(np.array(list(map(a_TT, X))))
+
+    if a_TT_max == 0:
+        return None, None, None
+    else:
+        EMMS_max = a_TT_max / S_n_TT
+        EMMS_min = a_TT_max / (a_TT_max * n - S_n_TT)
+        out = X[np.where(a_TT_X == a_TT_max)[0][0]]
+
+        return EMMS_max, EMMS_min, out
 
 
 def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
@@ -204,7 +212,7 @@ def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
     R_w = (2 / n) * (1 + k1)
     MMS_max, MMS_min = MMS(X_new)
 
-    while MMS_max > R_w or MMS_min > R_w:
+    while MMS_max != MMS_min and (MMS_max > R_w or MMS_min > R_w):
         if MMS_max > R_w:
             out = np.max(X_new)  # Max. element is the outlier
         else:
@@ -212,31 +220,36 @@ def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
 
         # Outlier indexes (current & original datasets)
         r = np.where(X_new == out)[0][0]
-        i = np.where(X_clean == out)[0][0]
+        
+        if np.where(X_clean == out)[0].size > 0:
+            i = np.where(X_clean == out)[0][0]
+            Y_pred[i] = 1  # Mark outlier
 
-        Y_pred[i] = 1  # Mark outlier
         X_new = remove(X_new, r)  # Remove outlier
-        n -= 1
+        n = len(X_new)
 
-        MMS_max, MMS_min = MMS(X_new)
+        if n == 1:
+            return X_new, Y_pred 
+        else:
+            MMS_max, MMS_min = MMS(X_new)
 
     R_w = (2 / n) * (1 + k2)
-    EMMS_max, EMMS_min = EMMS(X_new)
+    EMMS_max, EMMS_min, out = EMMS(X_new)
 
-    while EMMS_max > R_w or EMMS_min > R_w:
-        if EMMS_max > R_w:
-            out = np.max(X_new)
-        else:
-            out = np.min(X_new)
-
+    while EMMS_max != None and (EMMS_max > R_w or EMMS_min > R_w):
         r = np.where(X_new == out)[0][0]
-        i = np.where(X_clean == out)[0][0]
 
-        Y_pred[i] = 1
+        if np.where(X_clean == out)[0].size > 0:
+            i = np.where(X_clean == out)[0][0]
+            Y_pred[i] = 1  # Mark outlier
+
         X_new = remove(X_new, r)
-        n -= 1
+        n = len(X_new)
 
-        EMMS_max, EMMS_min = EMMS(X_new)
+        if n == 1:
+            return X_new, Y_pred 
+        else:
+            EMMS_max, EMMS_min, out = EMMS(X_new)
 
     return X_new, Y_pred
 
@@ -252,8 +265,20 @@ if __name__ == '__main__':
 
     keys, values = list(env_features.keys()), list(env_features.values())
     env_combs = [dict(zip(keys, comb)) for comb in itertools.product(*values)]
+    n = len(env_combs)
 
-    X, Y = np.array([100, 101, 102, 103.6, 104]), np.array([0, 0, 0, 1, 0])
-    X_new, Y_pred = detect_unknown(X, 0.5, 0.01)
+    t_out, t_nonout, pred_out, pred_nonout = 0, 0, 0, 0
+    for idx, comb in enumerate(env_combs):
+        print(f'\rComputing dataset {idx} out of {n}', end='')
+        X, Y = gen_data(comb)
+        _, Y_pred = detect_unknown(X, 0.5, 0.01)
 
-    print(X_new, Y_pred)
+        t_out += len(np.where(Y == 1)[0])
+        t_nonout = len(Y) - t_out
+
+        pred_out += len(np.where(Y_pred == 1)[0])
+        pred_nonout = len(Y_pred) - pred_out
+    print()
+
+    print(pred_out / t_out)
+    print(pred_nonout / t_nonout)
