@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
+from math import isnan
 
 
 def MMS(X: NDArray) -> tuple[float, float, float]:
@@ -20,17 +21,17 @@ def MMS(X: NDArray) -> tuple[float, float, float]:
         out: float
             Identified outlier.
     """
-    a_max, a_min = np.max(X), np.min(X)
-    S_n = np.sum(X)
+    a_max, a_min = np.nanmax(X), np.nanmin(X)
+    S_n = np.nansum(X)
     n = len(X)
 
     MMS_max = (a_max - a_min) / (S_n - a_min * n)
     MMS_min = (a_max - a_min) / (a_max * n - S_n)
-    
+
     if MMS_max > MMS_min:
-        out = np.max(X)
+        out = np.nanmax(X)
     elif MMS_max < MMS_min:
-        out = np.min(X)
+        out = np.nanmin(X)
     else:
         out = None
 
@@ -60,17 +61,19 @@ def EMMS(X: NDArray) -> tuple[float, float, float]:
     def a_T(a: float) -> float:
         return a - a_0
 
-    n = len(X)
-    G_aT = np.sum(a_T(X)) / n
-    Gx = np.sum(np.arange(n)) / n
-
+    idx = np.where(np.isnan(X), np.nan, np.arange(len(X)))
+    n = np.count_nonzero(~np.isnan(X))
+    G_aT = np.nansum(a_T(X)) / n
+    Gx = np.nansum(idx) / n
+    
     def a_TT(a: float) -> float:
-        return np.abs(a_T(a) - np.where(X == a)[0][0] * (G_aT / Gx))
+        i = np.where(X == a)[0][0] if not isnan(a) else np.where(np.isnan(X))[0][0]
+        return np.abs(a_T(a) - i * (G_aT / Gx))
 
     a_TT_X = np.array(list(map(a_TT, X)))
-    a_TT_max = np.max(a_TT_X)
+    a_TT_max = np.nanmax(a_TT_X)
 
-    S_n_TT = np.sum(np.array(list(map(a_TT, X))))
+    S_n_TT = np.nansum(np.array(list(map(a_TT, X))))
 
     if a_TT_max == 0:
         return None, None, None

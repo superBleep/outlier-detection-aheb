@@ -6,7 +6,7 @@ import itertools
 
 def gen_data(features: dict) -> tuple[NDArray, NDArray]:
     """
-        Generate artificial contaminated datasets, based on set of features.
+        Generate artificial contaminated datasets, based on a set of features.
 
         Parameters
         ----------
@@ -65,13 +65,21 @@ def gen_data(features: dict) -> tuple[NDArray, NDArray]:
     return X, Y
 
 
-def gen_features():
+def gen_features() -> list[dict]:
+    """
+        Generate different combinations of environments to test the algorithms.
+
+        Returns
+        -------
+        env_combs : list[dict]
+            List of dictionaries containing environment features.
+    """
     env_features = {
         'type': ['asc', 'const', 'desc'],
         'n': np.arange(10, 1001),
         'gauss_out': [True, False],
         'ref_outlier': [True, False],
-        'init_miss': [False, False]
+        'init_miss': [True, False]
     }
 
     keys, values = list(env_features.keys()), list(env_features.values())
@@ -80,18 +88,37 @@ def gen_features():
     return env_combs
 
 
-def gen_graph(X: NDArray, Y_pred: NDArray)-> None:
+def gen_graph(X: NDArray, Y_pred: NDArray, k1: float, k2: float) -> None:
+    """
+        Plot a graph for an outlier detection over a dataset.
+
+        Parameters
+        ----------
+        X : ndarray
+            Original dataset.
+        Y_pred: ndarray
+            Predicted outlier labels.
+        k1: float
+            Constant for the outlier detection criteria, using MMS.
+        k2: float
+            Constant for the outlier detection criteria, using EMMS.
+    """
     plt.figure(1)
 
-    plt.scatter(np.where(Y_pred == 0)[0], X[Y_pred == 0], c='green', marker='s')
-    plt.scatter(np.where(Y_pred == 1)[0], X[Y_pred == 1], c='yellow', marker='.')
-    plt.scatter(np.where(Y_pred == 2)[0], X[Y_pred == 2], c='red', marker='^')
+    plt.scatter(np.where(Y_pred == 0)[0], X[Y_pred == 0], c='green', marker='s', edgecolor='black', label='Nonoutliers')
+    plt.scatter(np.where(Y_pred == 1)[0], X[Y_pred == 1], c='red', marker='^', edgecolor='black', label='Detected by MMS')
+    plt.scatter(np.where(Y_pred == 2)[0], X[Y_pred == 2], c='yellow', marker='.', edgecolor='black', s=100, label='Detected by EMMS')
 
     for i in range(len(X)):
-        plt.text(i, X[i], '{:.2f}'.format(X[i]), alpha=0.5)
+        alpha = 0.5 if i in np.where(Y_pred == 0)[0] else 1
 
+        plt.text(i, X[i], '{:.2f}'.format(X[i]), alpha=alpha, ha='center', va='bottom')
+
+    plt.title(f'Outlier predictions ($k_1={k1}$, $k_2={k2}$)')
     plt.xlabel('Index')
     plt.ylabel('Value')
+    plt.legend()
+
 
     plt.show()
 

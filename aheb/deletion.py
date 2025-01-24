@@ -38,6 +38,30 @@ def remove(X: NDArray, r: int) -> NDArray:
     return X_new
 
 
+def to_const(X: NDArray) -> NDArray:
+    """
+        Transform the provided series to a new one with a constant value (NaN values included). If the resulting series is not constant, that means outliers are present in the original series.
+
+        Parameters
+        ----------
+        X : ndarray
+            Original series.
+
+        Returns
+        -------
+        X_TT: ndarray
+            Computed constant series.
+    """
+    idx = np.where(np.isnan(X), np.nan, np.arange(len(X)))
+
+    X_T = X - X[0]  # Shift elements of the original series
+    m = np.nansum(X_T) / np.nansum(idx)  # Gradient takes into accout the shifting
+    X_prime = idx * m
+    X_TT = X_prime - X_T
+
+    return X_TT
+
+
 def remove_nan(X: NDArray) -> NDArray:
     """
         Remove all the missing elements from a series.
