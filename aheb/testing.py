@@ -1,0 +1,97 @@
+import numpy as np
+from numpy.typing import NDArray
+import matplotlib.pyplot as plt
+import itertools
+
+
+def gen_data(features: dict) -> tuple[NDArray, NDArray]:
+    """
+        Generate artificial contaminated datasets, based on set of features.
+
+        Parameters
+        ----------
+        features : dict
+            Dictionary containing the necesarry features to build the dataset.
+
+        Returns
+        -------
+        X : ndarray
+            The constructed dataset.
+        Y : ndarray
+            Ground truth for the dataset.
+    """
+    n = features['n']
+    n_cont = np.int32(n * 0.5)
+    n_missing = np.int32(n * 0.1)
+
+    ref = np.random.randint(-100, 100)
+
+    # Generate an arithmetic progression with n elements
+    match features['type']:
+        case 'asc':
+            X = np.arange(ref, ref + n, dtype=np.float32)
+        case 'const':
+            X = np.repeat([100.0], n)
+        case 'desc':
+            X = np.arange(ref + n - 1, ref - 1, -1, dtype=np.float32)
+        
+    cont_idx = np.random.choice(n, n_cont, replace=False)
+
+    # Make sure the first element is an outlier
+    if features['ref_outlier'] and 0 not in cont_idx:
+        cont_idx[0] = 0
+
+    # Make sure the first element is NOT an outlier
+    if not features['ref_outlier'] and 0 in cont_idx:
+        np.delete(cont_idx, np.where(cont_idx == 0)[0][0])
+
+    # Generate outliers
+    if features['gauss_out']:
+        outliers = np.random.normal(np.nanmean(X), scale=5, size=n_cont)
+    else:
+        outliers = X[cont_idx] * np.random.choice([1e-2, 1e2], n_cont)
+
+    # Replace selected data with the generated outliers
+    Y = np.repeat([0], n)
+    for i, idx in enumerate(cont_idx):
+        X[idx] = outliers[i]
+        Y[idx] = 1
+
+    if features['init_miss']:
+        nan_idx = np.random.choice(np.arange(n)[1:], n_missing, replace=False)
+
+        X[nan_idx], Y[nan_idx] = np.nan, -1
+
+    return X, Y
+
+
+def gen_features():
+    env_features = {
+        'type': ['asc', 'const', 'desc'],
+        'n': np.arange(10, 1001),
+        'gauss_out': [True, False],
+        'ref_outlier': [True, False],
+        'init_miss': [False, False]
+    }
+
+    keys, values = list(env_features.keys()), list(env_features.values())
+    env_combs = [dict(zip(keys, comb)) for comb in itertools.product(*values)]
+
+    return env_combs
+
+
+def gen_graph(X: NDArray, Y_pred: NDArray)-> None:
+    plt.figure(1)
+
+    plt.scatter(np.where(Y_pred == 0)[0], X[Y_pred == 0], c='green', marker='s')
+    plt.scatter(np.where(Y_pred == 1)[0], X[Y_pred == 1], c='yellow', marker='.')
+    plt.scatter(np.where(Y_pred == 2)[0], X[Y_pred == 2], c='red', marker='^')
+
+    for i in range(len(X)):
+        plt.text(i, X[i], '{:.2f}'.format(X[i]), alpha=0.5)
+
+    plt.xlabel('Index')
+    plt.ylabel('Value')
+
+    plt.show()
+
