@@ -41,11 +41,12 @@ def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
     while out != None and (MMS_max > R_w or MMS_min > R_w):
         # Continue only if the outlier is significant
         # (minimum / maximum of the original series)
-        orig = X[np.where(X_new == out)]
+        orig = X[np.where(np.isclose(X_new, out))][0]
+
         if orig != np.nanmax(X_orig) and orig != np.nanmin(X_orig):
             break
 
-        r = np.where(X_new == out)[0][0]
+        r = np.where(np.isclose(X_new, out))[0][0]
         X_new[r] = np.nan
         X_orig[r] = np.nan
         X_new = to_const(X_new)  # Reconvert the working series
@@ -60,10 +61,11 @@ def detect_unknown(X: NDArray, k1: float, k2: float) -> tuple[NDArray, NDArray]:
     while out != None and (EMMS_max > R_w or EMMS_min > R_w):
         # Continue only if there are outliers present
         # (i.e. the transformation of the original series is constant)
-        if np.nansum(to_const(X_orig)) == 0:
+        orig = to_const(X_orig)
+        if np.unique(orig[~np.isnan(orig)]).size == 1:
             break
 
-        r = np.where(X_new == out)[0][0]
+        r = np.where(np.isclose(X_new, out))[0][0]
         X_new[r] = np.nan
         X_orig[r] = np.nan
         X_new = to_const(X_new)

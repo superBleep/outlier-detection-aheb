@@ -43,13 +43,14 @@ def gen_data(features: dict) -> tuple[NDArray, NDArray]:
 
     # Make sure the first element is NOT an outlier
     if not features['ref_outlier'] and 0 in cont_idx:
-        np.delete(cont_idx, np.where(cont_idx == 0)[0][0])
+        cont_idx = cont_idx[cont_idx != 0]
+        n_cont -= 1
 
     # Generate outliers
     if features['gauss_out']:
         outliers = np.random.normal(np.nanmean(X), scale=5, size=n_cont)
     else:
-        outliers = X[cont_idx] * np.random.choice([1e-2, 1e2], n_cont)
+        outliers = X[cont_idx] * np.random.choice([1e-2, 1e2], n_cont).astype('float')
 
     # Replace selected data with the generated outliers
     Y = np.repeat([0], n)

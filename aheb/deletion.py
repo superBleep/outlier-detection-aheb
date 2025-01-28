@@ -54,7 +54,8 @@ def to_const(X: NDArray) -> NDArray:
     """
     idx = np.where(np.isnan(X), np.nan, np.arange(len(X)))
 
-    X_T = X - X[0]  # Shift elements of the original series
+    a_0 = X[int(idx[~np.isnan(idx)][0])]  # First non nan element
+    X_T = X - a_0  # Shift elements of the original series
     m = np.nansum(X_T) / np.nansum(idx)  # Gradient takes into accout the shifting
     X_prime = idx * m
     X_TT = X_prime - X_T
