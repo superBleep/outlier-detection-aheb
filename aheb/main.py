@@ -71,10 +71,17 @@ def test_synthetic_data(ref_outlier, n):
     pfp = round(fp / (tp + fn) * 100, 2)
     print(f'Falsely detected outliers: {pfp}%')
 
+    t_acc = round((tp + tn) / (tp + tn + fp + fn) * 100, 2)
+    print(f'Avg. accuracy score: {t_acc}%')
+
+    print('-------------')
+
+
 if __name__ == '__main__':
-    #test_figure_8()
-    #test_figure_9()
-    #test_synthetic_data(False, 10)
-    #test_synthetic_data(True, 10)
+    print(len(gen_features()))
+    test_figure_8()
+    test_figure_9()
+    test_synthetic_data(False, 20)
+    test_synthetic_data(True, 20)
 
     pass

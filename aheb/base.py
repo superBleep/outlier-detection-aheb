@@ -91,3 +91,4 @@ def EMMS(X: NDArray) -> tuple[float, float, float]:
             out = None
 
         return EMMS_max, EMMS_min, out
+    

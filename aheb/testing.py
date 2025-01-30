@@ -120,6 +120,4 @@ def gen_graph(X: NDArray, Y_pred: NDArray, k1: float, k2: float) -> None:
     plt.ylabel('Value')
     plt.legend()
 
-
     plt.show()
-

@@ -40,7 +40,8 @@ def remove(X: NDArray, r: int) -> NDArray:
 
 def to_const(X: NDArray) -> NDArray:
     """
-        Transform the provided series to a new one with a constant value (NaN values included). If the resulting series is not constant, that means outliers are present in the original series.
+        Transform the provided series to a new one with a constant value (NaN values included). 
+        If the resulting series is not constant, that means outliers are present in the original series.
 
         Parameters
         ----------
